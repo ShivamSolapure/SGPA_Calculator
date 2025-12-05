@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Branch SGPA Calculator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+    <!-- React and Babel CDNs for in-browser JSX compilation -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useCallback } = React;
+
+        // --- 1. Grading and Subject Data Structures ---
+
+        // Grade Point Mapping (10-point scale assumed)
+        const GRADE_MAP = {
+            'A+': 10,
+            'A': 9,
+            'B+': 8,
+            'B': 7,
+            'C+': 6,
+            'C': 5,
+            'D': 4,
+            'F': 0, // Fail
+            'Select Grade': null,
+        };
+
+        const GRADES = Object.keys(GRADE_MAP);
+
+        // Helper function to process subject data into a unified, flat structure
+        const createCourse = (name, theoryCredit, practicalCredit) => ({
+            name,
+            theory: theoryCredit > 0 ? { credit: theoryCredit, type: 'Theory' } : null,
+            practical: practicalCredit > 0 ? { credit: practicalCredit, type: 'Practical' } : null,
+        });
+
+        // --- 2. Comprehensive Course Data for 10 Branches (Based on User Input) ---
+        const COURSE_STRUCTURE = {
+            'Common': {
+                'Semester I': [
+                    createCourse('Physics', 3, 1),
+                    createCourse('Mathematics-I', 4, 0),
+                    createCourse('Biology for Engineers', 2, 0),
+                    createCourse('Basic Electrical Engineering', 3, 1),
+                    createCourse('Programming for Problem Solving', 3, 1),
+                    createCourse('Engineering Exploration', 0, 2),
+                    createCourse('Yoga and Sports', 0, 2),
+                ],
+                'Semester II': [
+                    createCourse('Chemistry', 3, 1),
+                    createCourse('Mathematics-II', 3, 0),
+                    createCourse('Engineering Graphics and Design', 2, 2),
+                    createCourse('Professional Communication', 2, 1),
+                    createCourse('Programme Core Course', 3, 1),
+                    createCourse('Introduction to Indian Knowledge System', 2, 0),
+                    createCourse('Photography / Dramatics', 0, 2),
+                ],
+            },
+            'Chemical Engineering (CHE)': {
+                'Semester III': [
+                    createCourse('Maths III - Num. Methods, Prob. & Stat.', 3, 0),
+                    createCourse('Fluid Mechanics', 3, 1),
+                    createCourse('Chemical Engineering Thermodynamics - I', 3, 1),
+                    createCourse('Multidisciplinary Minor - I', 3, 0),
+                    createCourse('Open Elective - I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project - I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Chemical Engineering Thermodynamics - II', 3, 0),
+                    createCourse('Heat Transfer', 3, 1),
+                    createCourse('Mass Transfer - I', 3, 1),
+                    createCourse('Multidisciplinary Minor - II', 2, 1),
+                    createCourse('Open Elective - II', 3, 0),
+                    createCourse('Water Analysis Techniques', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Mechanical Operation', 3, 1),
+                    createCourse('Mass Transfer - II', 3, 1),
+                    createCourse('Chemical Reaction Engineering - I', 3, 1),
+                    createCourse('PEC 01', 3, 1),
+                    createCourse('Multidisciplinary Minor - III', 3, 0),
+                    createCourse('Open Elective', 2, 0),
+                    createCourse('Software Skills (Aspen/Hysys/CHEMCAD)', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Process Instrumentation & Control', 2, 0),
+                    createCourse('Chemical Reaction Engineering - II', 3, 1),
+                    createCourse('Chemical Process Industries', 2, 0),
+                    createCourse('Process Equipment Design & Drawing', 3, 1),
+                    createCourse('PEC 02', 3, 0),
+                    createCourse('PEC 03', 3, 0),
+                    createCourse('Multidisciplinary Minor - IV', 3, 0),
+                    createCourse('Hands on Modern Analytical Techniques', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('Transport Phenomena', 3, 0),
+                    createCourse('Process Modelling Simulation', 3, 1),
+                    createCourse('Process Dynamics & Control', 3, 1),
+                    createCourse('Elective - IV', 3, 0),
+                    createCourse('Elective - V', 3, 0),
+                    createCourse('Multidisciplinary Minor - V', 3, 0),
+                    createCourse('Project', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('Elective - V (Final)', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship/Project', 0, 8),
+                    createCourse('Technical Report Writing', 2, 0),
+                ],
+            },
+            'Civil Engineering (CE)': {
+                'Semester III': [
+                    createCourse('Maths III - Num. Methods, Prob. & Stat.', 3, 0),
+                    createCourse('Strength of Materials', 3, 1),
+                    createCourse('Fluid Mechanics', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 3, 0),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project', 1, 1),
+                ],
+                'Semester IV': [
+                    createCourse('Hydraulic Engineering', 3, 1),
+                    createCourse('Surveying and Geomatics', 3, 1),
+                    createCourse('Building Planning and Construction', 3, 0),
+                    createCourse('Multidisciplinary Minor – II', 3, 0),
+                    createCourse('Open Elective – II', 3, 0),
+                    createCourse('Building Planning & CAD', 1, 1),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Building Materials & Concrete Tech.', 3, 1),
+                    createCourse('Geotechnical Engineering', 3, 1),
+                    createCourse('Theory of Structures – I', 3, 1),
+                    createCourse('PEC / Elective', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                    createCourse('Basic Tools for Civil Engineers', 1, 1),
+                ],
+                'Semester VI': [
+                    createCourse('Water Resources Engineering I', 3, 0),
+                    createCourse('Design of RCC Structures', 3, 1),
+                    createCourse('Theory of Structures – II', 3, 1),
+                    createCourse('PEC / Elective 02', 3, 0),
+                    createCourse('PEC / Elective 03', 3, 0),
+                    createCourse('Multidisciplinary Minor – IV', 3, 0),
+                    createCourse('Water and Wastewater Testing', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('Transportation Engineering', 3, 1),
+                    createCourse('Engineering Economics, Est. & Costing', 3, 1),
+                    createCourse('Water Resources Engineering II', 3, 1),
+                    createCourse('Elective‑IV', 3, 1),
+                    createCourse('Elective‑V', 3, 0),
+                    createCourse('Multidisciplinary Minor – V', 3, 0),
+                    createCourse('Industrial Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('Elective‑V (Final)', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship / Project', 0, 8),
+                    createCourse('Modern Indian Languages', 2, 0),
+                ],
+            },
+            'Computer Science & Engineering (CSE)': {
+                'Semester III': [
+                    createCourse('Maths III - Applied Lin. Alg., Prob. & Stat.', 3, 0),
+                    createCourse('Discrete Mathematics', 3, 0),
+                    createCourse('Digital Electronics', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 3, 0),
+                    createCourse('Open Elective – I', 2, 1),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project – I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Microprocessor and Interfacing', 3, 1),
+                    createCourse('Computer Organization & Architecture', 3, 0),
+                    createCourse('Data Structures', 3, 1),
+                    createCourse('Multidisciplinary Minor – II', 3, 0),
+                    createCourse('Open Elective – II', 2, 1),
+                    createCourse('Object Oriented Programming with Java', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Formal Language & Automata Theory', 3, 0),
+                    createCourse('Operating Systems', 3, 1),
+                    createCourse('Design and Analysis of Algorithms', 3, 1),
+                    createCourse('Chosen PEC', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                    createCourse('Mini Project', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Compiler Design', 3, 1),
+                    createCourse('Database Management Systems', 3, 1),
+                    createCourse('Data Communication & Networking', 3, 1),
+                    createCourse('Chosen PEC / Electives 1', 3, 0),
+                    createCourse('Chosen PEC / Electives 2', 3, 0),
+                    createCourse('Multidisciplinary Minor – 302', 3, 0),
+                    createCourse('Mini Project (VSEC)', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('Software Engineering', 3, 1),
+                    createCourse('Cryptography & Network Security', 3, 1),
+                    createCourse('TCP/IP Networking', 3, 1),
+                    createCourse('Chosen Elective 1 (PEC)', 3, 1),
+                    createCourse('Chosen Elective 2 (PEC)', 3, 1),
+                    createCourse('Multidisciplinary Minor – V', 3, 0),
+                    createCourse('Industrial/Technical Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('Chosen PEC (Cloud/NLP/Data Science)', 3, 0),
+                    createCourse('Project', 0, 4),
+                    createCourse('Internship', 0, 12),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+            'Information Technology (IT)': {
+                'Semester III': [
+                    createCourse('Maths III - Applied Lin. Alg., Prob. & Stat.', 3, 0),
+                    createCourse('Data Structures', 3, 1),
+                    createCourse('Object Oriented Programming', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 2, 1),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project – I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Discrete Mathematics', 3, 0),
+                    createCourse('Computer Organization and Architecture', 3, 1),
+                    createCourse('Java Programming', 3, 1),
+                    createCourse('Multidisciplinary Minor – II', 2, 1),
+                    createCourse('Open Elective – II', 3, 0),
+                    createCourse('Mini Project (VSEC)', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Software Engineering', 3, 1),
+                    createCourse('Operating Systems', 3, 1),
+                    createCourse('Database Management Systems', 3, 1),
+                    createCourse('Theory of Computation', 3, 1),
+                    createCourse('Chosen PEC', 3, 0),
+                    createCourse('Multidisciplinary Minor', 3, 0),
+                    createCourse('Open Elective', 2, 0),
+                    createCourse('Full-Stack / VSEC Project', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Computer Algorithms', 3, 1),
+                    createCourse('Computer Networks', 3, 1),
+                    createCourse('Compiler Design', 3, 1),
+                    createCourse('Chosen PEC / Electives 1', 3, 0),
+                    createCourse('Chosen PEC / Electives 2', 3, 0),
+                    createCourse('Multidisciplinary Minor – 302', 3, 0),
+                    createCourse('Full-Stack Development (VSEC)', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('Cryptography & Network Security', 3, 1),
+                    createCourse('Internet of Things', 3, 1),
+                    createCourse('Machine Learning', 3, 1),
+                    createCourse('Chosen Elective 1', 3, 0),
+                    createCourse('Second Elective 2', 3, 0),
+                    createCourse('Multidisciplinary Minor – V', 3, 0),
+                    createCourse('Industrial Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('Chosen PEC', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship / Project', 0, 8),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+            'Electrical Engineering (EE)': {
+                'Semester III': [
+                    createCourse('Maths III - Complex Analysis, Prob. & Stat.', 3, 0),
+                    createCourse('Electrical Machines – I', 3, 1),
+                    createCourse('Network Analysis', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 2, 1),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project – I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Electrical Machines – II', 3, 1),
+                    createCourse('Electrical & Electronics Measurements', 2, 1),
+                    createCourse('Analog & Digital Circuits', 3, 1),
+                    createCourse('Multidisciplinary Minor – II', 3, 0),
+                    createCourse('Open Elective – II', 3, 0),
+                    createCourse('Micro Project (VSEC)', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Power System Engineering', 3, 0),
+                    createCourse('Feedback Control System', 3, 1),
+                    createCourse('Electromagnetic Fields', 3, 1),
+                    createCourse('PEC – 01 (Elective)', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                    createCourse('Mini Project (VSEC)', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Power System Analysis & Stability', 3, 1),
+                    createCourse('Power Electronics I', 3, 1),
+                    createCourse('Digital Signal Processing', 3, 0),
+                    createCourse('PEC – 02', 3, 0),
+                    createCourse('PEC – 03', 3, 0),
+                    createCourse('Multidisciplinary Minor – 302', 3, 0),
+                    createCourse('Mini Project (VSEC)', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('HVDC and FACTs', 3, 1),
+                    createCourse('Power Electronics II', 3, 1),
+                    createCourse('Switchgear and Protection', 3, 1),
+                    createCourse('PEC – 04 (Elective IV)', 3, 1),
+                    createCourse('PEC – 05 (Elective V)', 3, 1),
+                    createCourse('Multidisciplinary Minor – IV', 3, 0),
+                    createCourse('Industrial Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('PEC – 06 (Final Elective)', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship / Project', 0, 8),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+            'Electronics & Telecommunication (E&TC)': {
+                'Semester III': [
+                    createCourse('Maths III - Complex Analysis, Prob. & Stat.', 3, 0),
+                    createCourse('Electronic Devices & Circuits', 3, 1),
+                    createCourse('Network Theory', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 2, 1),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Signals and Systems', 3, 1),
+                    createCourse('Principles of Communication Engineering', 3, 1),
+                    createCourse('Digital Circuit Design & Microprocessors', 3, 1),
+                    createCourse('Multidisciplinary Minor – II', 2, 1),
+                    createCourse('Open Elective – II', 3, 0),
+                    createCourse('Mini Project I (VSEC)', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Elective I', 3, 1),
+                    createCourse('Elective II', 3, 1),
+                    createCourse('Elective III', 3, 1),
+                    createCourse('Elective IV', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                    createCourse('VSEC Project', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Elective I', 3, 1),
+                    createCourse('Elective II', 3, 1),
+                    createCourse('Elective III', 3, 1),
+                    createCourse('Elective IV', 3, 1),
+                    createCourse('Multidisciplinary Minor – IV', 3, 0),
+                    createCourse('VSEC Project', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('Microwave Engineering', 3, 1),
+                    createCourse('Electronic Instrumentation', 3, 1),
+                    createCourse('Elective‑III (PEC / OEC)', 3, 1),
+                    createCourse('Elective‑IV (PEC / OEC)', 3, 1),
+                    createCourse('Elective‑V (HMC)', 2, 0),
+                    createCourse('Industrial Training Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('Project', 0, 12),
+                    createCourse('Elective‑VI (PEC / OEC)', 3, 0),
+                    createCourse('Elective‑VII (PEC / OEC)', 3, 0),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+            'Instrumentation Engineering (IN)': {
+                'Semester III': [
+                    createCourse('Maths III - Complex Analysis, Prob. & Stat.', 3, 0),
+                    createCourse('Sensors and Transducers', 3, 1),
+                    createCourse('Circuit Theory', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 2, 1),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project – I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Electrical & Electronics Measurements', 3, 1),
+                    createCourse('Linear Integrated Circuits', 3, 1),
+                    createCourse('Signals and Systems', 3, 0),
+                    createCourse('Multidisciplinary Minor – II', 2, 1),
+                    createCourse('Open Elective – II', 3, 0),
+                    createCourse('Micro Project (VSEC)', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Industrial Instrumentation', 3, 1),
+                    createCourse('Unit Operation & Instrumentation', 3, 1),
+                    createCourse('Microprocessor & Microcontroller', 3, 1),
+                    createCourse('PEC – 01 (Elective)', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                    createCourse('VSEC (Mini Project)', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Process Control', 3, 1),
+                    createCourse('Distributed Control System', 3, 1),
+                    createCourse('Control System Components', 3, 1),
+                    createCourse('PEC – 02 (Elective)', 3, 0),
+                    createCourse('PEC – 03 (Elective)', 3, 0),
+                    createCourse('Multidisciplinary Minor – IV', 3, 0),
+                    createCourse('Case Study on Industrial Visit (VSEC)', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('Chemical Analytical Instrumentation', 3, 0),
+                    createCourse('Biomedical Instrumentation', 3, 1),
+                    createCourse('Modern Control Theory', 3, 1),
+                    createCourse('PEC – 04 (Elective)', 3, 0),
+                    createCourse('PEC – 05 (Elective)', 3, 0),
+                    createCourse('Multidisciplinary Minor – V', 3, 0),
+                    createCourse('Industrial Seminar', 0, 2),
+                ],
+                'Semester VIII': [
+                    createCourse('PEC – 06', 3, 0),
+                    createCourse('PEC – 07', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship / Project', 0, 8),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+            'Mechanical Engineering (ME)': {
+                'Semester III': [
+                    createCourse('Maths III - Num. Methods, Prob. & Stat.', 3, 0),
+                    createCourse('Thermodynamics', 3, 1),
+                    createCourse('Materials Science', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 2, 1),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project – I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Fluid Mechanics & Fluid Machines', 3, 1),
+                    createCourse('Strength of Materials', 3, 1),
+                    createCourse('Manufacturing Processes – I', 2, 1),
+                    createCourse('Multidisciplinary Minor – II', 2, 1),
+                    createCourse('Open Elective – II', 2, 1),
+                    createCourse('Technical Seminar & Report Writing', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Heat Transfer', 3, 1),
+                    createCourse('Theory of Machines – I', 2, 1),
+                    createCourse('Machine Design – I', 3, 0),
+                    createCourse('Manufacturing Processes – II', 3, 1),
+                    createCourse('PEC / Elective (Turbomachines / CPOOP)', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                ],
+                'Semester VI': [
+                    createCourse('Refrigeration & Air Conditioning', 3, 1),
+                    createCourse('Theory of Machines – II', 3, 1),
+                    createCourse('Machine Design – II', 3, 1),
+                    createCourse('PEC / Elective (E-PLM / Additive Mfg.)', 3, 1),
+                    createCourse('PEC / Elective (Tool Design / Power Plant)', 3, 1),
+                    createCourse('Multidisciplinary Minor – IV', 3, 0),
+                    createCourse('Robotics: Drives and End‑effectors', 1, 1),
+                ],
+                'Semester VII': [
+                    createCourse('Renewable Energy', 3, 1),
+                    createCourse('Computer-Aided Design (CAD)', 3, 1),
+                    createCourse('Operations Research', 3, 1),
+                    createCourse('PEC / Elective IV (Tribology / Quality)', 3, 0),
+                    createCourse('PEC / Elective V (CFD / HVAC)', 3, 1),
+                    createCourse('Multidisciplinary Minor – V', 3, 0),
+                    createCourse('Industrial Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('PEC / Elective (Industry 4.0 / Composite)', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship / Project', 0, 8),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+            'Production Engineering (PE)': {
+                'Semester III': [
+                    createCourse('Maths III - Num. Methods, Prob. & Stat.', 3, 0),
+                    createCourse('Strength of Materials', 3, 1),
+                    createCourse('Manufacturing Processes', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 2, 1),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project – I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Machine Drawing', 2, 1),
+                    createCourse('Theory of Machines', 3, 1),
+                    createCourse('Thermal Engineering', 3, 1),
+                    createCourse('Multidisciplinary Minor – II', 2, 1),
+                    createCourse('Open Elective – II', 3, 0),
+                    createCourse('CNC Programming & 3D Printing (VSEC)', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Metallurgy and Metal Forming', 3, 1),
+                    createCourse('Fluid Mechanics & Heat Transfer', 3, 1),
+                    createCourse('Tool Design & Manufacturing Lab', 3, 1),
+                    createCourse('PEC / Elective (FEA / Renewable Energy)', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                    createCourse('Python Programming (VSEC)', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Machine Design', 3, 1),
+                    createCourse('Mechanical Measurement & Metrology', 3, 1),
+                    createCourse('Prod. Management & Operations Research', 3, 1),
+                    createCourse('PEC / Elective 1', 3, 0),
+                    createCourse('PEC / Elective 2', 3, 0),
+                    createCourse('Multidisciplinary Minor – IV', 3, 0),
+                    createCourse('Robotics Lab (VSEC)', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('CAD/CAM', 3, 1),
+                    createCourse('Advanced Manufacturing Processes', 3, 1),
+                    createCourse('Plastics & Composite Technology', 3, 0),
+                    createCourse('PEC / Elective IV (Project Mgmt / Mechatronics)', 2, 1),
+                    createCourse('PEC / Elective V (Productivity / Six Sigma)', 2, 1),
+                    createCourse('Multidisciplinary Minor – V', 3, 0),
+                    createCourse('Industrial Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('PEC / Elective (Advanced Materials / IPR)', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship / Project', 0, 8),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+            'Textile Technology (TT)': {
+                'Semester III': [
+                    createCourse('Maths III - Num. Methods, Prob. & Stat.', 3, 0),
+                    createCourse('Spun Yarn Technology – I', 3, 1),
+                    createCourse('Fabric Forming Technology – I', 3, 1),
+                    createCourse('Multidisciplinary Minor – I', 3, 1),
+                    createCourse('Open Elective – I', 3, 0),
+                    createCourse('Project Management', 2, 0),
+                    createCourse('Human Values and Professional Ethics', 2, 0),
+                    createCourse('Field Project – I', 0, 2),
+                ],
+                'Semester IV': [
+                    createCourse('Spun Yarn Technology – II', 3, 1),
+                    createCourse('Fabric Forming Technology – II', 3, 1),
+                    createCourse('Natural & Synthetic Fibers', 3, 0),
+                    createCourse('Multidisciplinary Minor – II', 3, 0),
+                    createCourse('Open Elective – II', 3, 0),
+                    createCourse('Textile Fiber Identification', 0, 2),
+                    createCourse('Indian Economy', 2, 0),
+                    createCourse('Environmental Studies', 2, 0),
+                ],
+                'Semester V': [
+                    createCourse('Textile Testing I', 3, 1),
+                    createCourse('Fabric Forming Technology III', 3, 1),
+                    createCourse('Man-Made Fibre Technology', 3, 1),
+                    createCourse('PEC / Elective (Spun Yarn Tech III / Fibre for Composite)', 3, 1),
+                    createCourse('Multidisciplinary Minor – III', 3, 0),
+                    createCourse('Open Elective – III', 2, 0),
+                    createCourse('VSEC (Laboratory / Project)', 0, 2),
+                ],
+                'Semester VI': [
+                    createCourse('Textile Testing II', 3, 1),
+                    createCourse('Textile Wet Processing I', 3, 0),
+                    createCourse('Technical Textile I', 3, 1),
+                    createCourse('PEC / Elective (Multi & Long Fibre Spinning)', 3, 1),
+                    createCourse('PEC / Elective (Post Spinning & Texturing)', 3, 0),
+                    createCourse('Multidisciplinary Minor – IV', 3, 0),
+                    createCourse('Mini Project (VSEC)', 0, 2),
+                ],
+                'Semester VII': [
+                    createCourse('Textile Wet Processing II', 3, 1),
+                    createCourse('Process Control in Textiles', 3, 1),
+                    createCourse('Knitting and Nonwoven', 3, 1),
+                    createCourse('PEC / Elective IV (Smart Textiles)', 3, 1),
+                    createCourse('PEC / Elective V (Supply Chain Mgmt)', 3, 1),
+                    createCourse('Multidisciplinary Minor – V', 3, 0),
+                    createCourse('Industrial Seminar', 0, 1),
+                ],
+                'Semester VIII': [
+                    createCourse('PEC / Elective VI (Economics & Business Law)', 3, 0),
+                    createCourse('Research Methodology', 3, 0),
+                    createCourse('Internship / Project', 0, 8),
+                    createCourse('Modern Indian Language', 2, 0),
+                ],
+            },
+        };
+
+        const BRANCHES = Object.keys(COURSE_STRUCTURE).filter(b => b !== 'Common');
+        const ALL_SEMESTERS = ['Semester I', 'Semester II', ...Object.keys(COURSE_STRUCTURE['Chemical Engineering (CHE)'])]; // All 8 Semesters
+
+        // --- 3. React Components and Logic ---
+
+        // Custom hook to manage all grade state across branches and semesters.
+        // The state structure is { 'BranchName': { 'SemesterName': { 'SubjectName_Type': 'Grade' } } }
+        const useGradeState = () => {
+            const [grades, setGrades] = useState({});
+
+            const setSubjectGrade = useCallback((branch, semester, subjectKey, grade) => {
+                setGrades(prevGrades => ({
+                    ...prevGrades,
+                    [branch]: {
+                        ...(prevGrades[branch] || {}),
+                        [semester]: {
+                            ...(prevGrades[branch]?.[semester] || {}),
+                            [subjectKey]: grade,
+                        },
+                    },
+                }));
+            }, []);
+
+            const getSubjectGrade = useCallback((branch, semester, subjectKey) => {
+                return grades?.[branch]?.[semester]?.[subjectKey] || 'Select Grade';
+            }, [grades]);
+
+            return { grades, setSubjectGrade, getSubjectGrade };
+        };
+
+        // Component for the grade dropdown.
+        const GradeInput = ({ branch, semester, subjectKey, currentGrade, setSubjectGrade }) => {
+            const handleChange = (e) => {
+                setSubjectGrade(branch, semester, subjectKey, e.target.value);
+            };
+
+            return (
+                <select
+                    value={currentGrade}
+                    onChange={handleChange}
+                    className={`p-2 border border-gray-300 rounded-lg text-sm transition focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full ${currentGrade === 'F' ? 'bg-red-100 border-red-400' : currentGrade !== 'Select Grade' ? 'bg-green-50' : 'bg-white'}`}
+                >
+                    {GRADES.map(grade => (
+                        <option key={grade} value={grade}>{grade}</option>
+                    ))}
+                </select>
+            );
+        };
+
+
+        // Core calculation logic.
+        const useCGPACalculator = (grades) => {
+            const calculateResult = useCallback((targetBranch, targetSemester) => {
+                let totalWeightedGP = 0;
+                let totalCredits = 0;
+                let semesterWeightedGP = 0;
+                let semesterCredits = 0;
+
+                // Iterate through all entered grades
+                for (const branchName of Object.keys(grades)) {
+                    const branchSemesters = grades[branchName];
+
+                    for (const semesterName of Object.keys(branchSemesters)) {
+                        const semesterGrades = branchSemesters[semesterName];
+                        const isCurrentSemester = branchName === targetBranch && semesterName === targetSemester;
+
+                        // Determine which course list to use (Common for Sem I/II, or Branch-specific)
+                        const courseList = (semesterName === 'Semester I' || semesterName === 'Semester II')
+                            ? COURSE_STRUCTURE['Common'][semesterName]
+                            : COURSE_STRUCTURE[branchName]?.[semesterName];
+
+                        if (!courseList) continue; // Skip if data is missing
+
+                        for (const course of courseList) {
+                            const components = [];
+                            if (course.theory) components.push({ ...course.theory, id: `${course.name}_Theory` });
+                            if (course.practical) components.push({ ...course.practical, id: `${course.name}_Practical` });
+
+                            for (const component of components) {
+                                const grade = semesterGrades[component.id];
+                                const gradePoint = GRADE_MAP[grade];
+
+                                if (gradePoint !== null && gradePoint !== undefined) {
+                                    const weightedGP = component.credit * gradePoint;
+
+                                    // Accumulate for CGPA
+                                    totalWeightedGP += weightedGP;
+                                    totalCredits += component.credit;
+
+                                    // Accumulate for SGPA (if current semester)
+                                    if (isCurrentSemester) {
+                                        semesterWeightedGP += weightedGP;
+                                        semesterCredits += component.credit;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                const sgpa = semesterCredits > 0 ? (semesterWeightedGP / semesterCredits).toFixed(2) : 'N/A';
+                const cgpa = totalCredits > 0 ? (totalWeightedGP / totalCredits).toFixed(2) : 'N/A';
+
+                return { sgpa, cgpa, totalCredits };
+            }, [grades]);
+
+            return { calculateResult };
+        };
+
+        // Main App component.
+        const App = () => {
+            // State management using localStorage for persistence
+            const initialBranch = localStorage.getItem('selectedBranch') || BRANCHES[0];
+            const initialSemester = localStorage.getItem('selectedSemester') || ALL_SEMESTERS[0];
+
+            const [selectedBranch, setSelectedBranch] = useState(initialBranch);
+            const [selectedSemester, setSelectedSemester] = useState(initialSemester);
+
+            const { grades, setSubjectGrade, getSubjectGrade } = useGradeState();
+            const { calculateResult } = useCGPACalculator(grades);
+
+            // Persist selections
+            React.useEffect(() => {
+                localStorage.setItem('selectedBranch', selectedBranch);
+                localStorage.setItem('selectedSemester', selectedSemester);
+            }, [selectedBranch, selectedSemester]);
+
+
+            // Determine the course list for the currently selected branch and semester
+            const courses = useMemo(() => {
+                let branchKey = selectedBranch;
+                let semesterKey = selectedSemester;
+
+                // Use Common subjects for Sem I and II, regardless of selected branch
+                if (semesterKey === 'Semester I' || semesterKey === 'Semester II') {
+                    branchKey = 'Common';
+                }
+
+                // Fallback to the selected branch if not Sem I/II
+                if (branchKey === 'Common' && (semesterKey !== 'Semester I' && semesterKey !== 'Semester II')) {
+                    branchKey = selectedBranch;
+                }
+
+                const semesterData = COURSE_STRUCTURE[branchKey]?.[semesterKey];
+                return semesterData || [];
+            }, [selectedBranch, selectedSemester]);
+
+            // Calculate results whenever grades change
+            const results = useMemo(() => {
+                return calculateResult(selectedBranch, selectedSemester);
+            }, [grades, selectedBranch, selectedSemester, calculateResult]);
+
+            // Handle branch change for Sem I/II continuity
+            const handleBranchChange = (e) => {
+                setSelectedBranch(e.target.value);
+            };
+
+            const handleSemesterChange = (e) => {
+                setSelectedSemester(e.target.value);
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50 p-4 sm:p-8 font-sans">
+                    <div className="max-w-6xl mx-auto bg-white shadow-2xl rounded-xl p-6 md:p-10">
+                        <h1 className="text-4xl font-extrabold text-indigo-700 mb-2">
+                            SGPA Calculator
+                        </h1>
+                        <p className="text-gray-600 mb-8">
+                            Select your branch and semester to input grades. Your Semester GPA (SGPA) is calculated across all semesters you enter grades for.
+                        </p>
+
+                        {/* 1. SELECTION CONTROLS */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10 p-5 bg-indigo-50 border-l-4 border-indigo-500 rounded-xl">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Branch</label>
+                                <select
+                                    value={selectedBranch}
+                                    onChange={handleBranchChange}
+                                    className="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white text-gray-800 transition"
+                                >
+                                    {BRANCHES.map(branch => (
+                                        <option key={branch} value={branch}>{branch}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Semester</label>
+                                <select
+                                    value={selectedSemester}
+                                    onChange={handleSemesterChange}
+                                    className="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white text-gray-800 transition"
+                                >
+                                    {ALL_SEMESTERS.map(sem => (
+                                        <option key={sem} value={sem}>{sem}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* 2. GRADE INPUT TABLE */}
+                        <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+                            {selectedBranch} - {selectedSemester} Subjects
+                        </h2>
+
+                        <div className="overflow-x-auto shadow-lg rounded-xl mb-10">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-indigo-600 text-white sticky top-0">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider rounded-tl-xl">Subjects</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider w-24">Credits</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider w-40 rounded-tr-xl">Your Grade</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {courses.length > 0 ? (
+                                        courses.flatMap((course) => {
+                                            const rows = [];
+                                            const uniqueKeyBase = `${selectedBranch}_${selectedSemester}_${course.name}`;
+
+                                            // Theory Component Row
+                                            if (course.theory) {
+                                                const subjectKey = `${course.name}_Theory`;
+                                                rows.push(
+                                                    <tr key={`${uniqueKeyBase}_T`} className="hover:bg-gray-50 transition">
+                                                        <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                            {course.name} <span className="text-gray-500 font-normal">(Theory)</span>
+                                                        </td>
+                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-center font-bold text-indigo-700">
+                                                            {course.theory.credit}
+                                                        </td>
+                                                        <td className="px-6 py-3 whitespace-nowrap text-sm">
+                                                            <GradeInput
+                                                                branch={selectedBranch}
+                                                                semester={selectedSemester}
+                                                                subjectKey={subjectKey}
+                                                                currentGrade={getSubjectGrade(selectedBranch, selectedSemester, subjectKey)}
+                                                                setSubjectGrade={setSubjectGrade}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }
+
+                                            // Practical Component Row (Distinguished visually by a dashed border)
+                                            if (course.practical) {
+                                                const subjectKey = `${course.name}_Practical`;
+                                                rows.push(
+                                                    <tr key={`${uniqueKeyBase}_P`} className="hover:bg-gray-50 transition border-t border-dashed border-gray-300">
+                                                        <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                            {course.name} <span className="text-gray-500 font-normal">(Practical)</span>
+                                                        </td>
+                                                        <td className="px-6 py-3 whitespace-nowrap text-sm text-center font-bold text-indigo-700">
+                                                            {course.practical.credit}
+                                                        </td>
+                                                        <td className="px-6 py-3 whitespace-nowrap text-sm">
+                                                            <GradeInput
+                                                                branch={selectedBranch}
+                                                                semester={selectedSemester}
+                                                                subjectKey={subjectKey}
+                                                                currentGrade={getSubjectGrade(selectedBranch, selectedSemester, subjectKey)}
+                                                                setSubjectGrade={setSubjectGrade}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }
+
+                                            return rows;
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="3" className="px-6 py-4 text-center text-gray-500 italic">
+                                                No specific course data found for this selection.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* 3. RESULTS PANEL */}
+                        <div className="bg-green-50 border-l-4 border-green-600 p-6 rounded-xl shadow-inner flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                            <div>
+                                <h3 className="text-2xl font-bold text-green-800 mb-1">Calculated Results</h3>
+                            </div>
+                            <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-6">
+                                <div className="text-center p-4 bg-white rounded-lg shadow-md border-b-4 border-green-500 w-full sm:w-auto min-w-[150px]">
+                                    <p className="text-sm font-medium text-gray-500">SGPA ({selectedSemester})</p>
+                                    <p className="text-4xl font-extrabold text-green-600">{results.sgpa}</p>
+                                </div>
+                                <div className="text-center p-4 bg-white rounded-lg shadow-md border-b-4 border-indigo-500 w-full sm:w-auto min-w-[150px]">
+                                    <p className="text-sm font-medium text-gray-500">Overall CGPA</p>
+                                    <p className="text-4xl font-extrabold text-indigo-600">{results.cgpa}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Mount the React application
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+    </script>
+</body>
+</html>
